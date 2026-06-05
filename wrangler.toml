@@ -1,0 +1,22 @@
+name = "investment-platform"
+main = "src/index.ts"
+compatibility_date = "2025-05-04"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "investment-db"
+database_id = ""
+
+[[kv_namespaces]]
+binding = "KV"
+id = ""
+
+[triggers]
+crons = ["0 22 * * *"]
+
+[env.production]
+[env.production.triggers]
+crons = [
+  "0 22 * * *",
+  "0 0 * * 0",
+]
