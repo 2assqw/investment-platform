@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:ui": "next dev -p 3001",
+    "build": "next build",
     "deploy": "wrangler deploy",
     "d1:migrate:local": "wrangler d1 execute investment-db --local --file=./migrations/0001_initial.sql",
     "d1:migrate:remote": "wrangler d1 execute investment-db --file=./migrations/0001_initial.sql",
@@ -19,6 +21,21 @@
     "wrangler": "^4.98.0"
   },
   "dependencies": {
+    "framer-motion": "^12.0.0",
+    "lucide-react": "^0.460.0",
+    "next": "^15.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.0",
     "yahoo-finance2": "^3.15.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250504.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.8",
+    "wrangler": "^4.98.0"
   }
 }
