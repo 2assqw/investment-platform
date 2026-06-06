@@ -1,9 +1,11 @@
 import { FinancialRow, ValuationBenchmarkRow } from '../types';
+import { NormalizationWarning } from '../normalizers/types';
 
 export interface EngineInput {
   ticker: string;
   financials: FinancialRow[];
   benchmarks?: ValuationBenchmarkRow[];
+  warnings?: NormalizationWarning[];
 }
 
 export interface EngineOutput {

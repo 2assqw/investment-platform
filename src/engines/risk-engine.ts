@@ -2,7 +2,34 @@ import { Engine, EngineInput, EngineOutput } from './types';
 import { clamp, roundToDecimal, safeDivide } from './scoring';
 import { FinancialRow } from '../types';
 
-// === Altman Z-Score (simplified — no market cap in engine) ===
+// ============================================================
+// Model metadata
+// ============================================================
+
+const ALTMAN_MODEL = 'simplified-v1';
+const FSCORE_MODEL = 'simplified-8factor-v1';
+const MSCORE_MODEL = 'simplified-4factor-v1';
+
+// Maximum possible contribution from each metric
+const ALTMAN_MAX = 33;
+const FSCORE_MAX = 33;
+const MSCORE_MAX = 34;
+
+// ============================================================
+// Breakdown item shape
+// ============================================================
+
+interface RiskMetric {
+  value: number | null;
+  score: number;
+  available: boolean;
+  model: string;
+  reason?: string;
+}
+
+// ============================================================
+// Altman Z-Score (simplified — single period is sufficient)
+// ============================================================
 
 function computeAltmanZ(f: FinancialRow): number {
   const x1 = safeDivide(f.shareholder_equity, f.total_assets);
@@ -12,14 +39,16 @@ function computeAltmanZ(f: FinancialRow): number {
 }
 
 function scoreAltman(z: number): number {
-  if (z > 3.0) return 33;
+  if (z > 3.0) return ALTMAN_MAX;
   if (z > 2.0) return 25;
   if (z > 1.0) return 17;
   if (z > 0) return 8;
   return 0;
 }
 
-// === Piotroski F-Score (0-8, simplified) ===
+// ============================================================
+// Piotroski F-Score (0-8, simplified — requires 2 periods)
+// ============================================================
 
 function computeFScore(current: FinancialRow, prior: FinancialRow): number {
   let score = 0;
@@ -52,10 +81,12 @@ function computeFScore(current: FinancialRow, prior: FinancialRow): number {
 }
 
 function scoreFScore(f: number): number {
-  return Math.round((f / 8) * 33);
+  return Math.round((f / 8) * FSCORE_MAX);
 }
 
-// === Beneish M-Score (simplified 4-variable) ===
+// ============================================================
+// Beneish M-Score (simplified 4-variable — requires 2 periods)
+// ============================================================
 
 function computeMScore(current: FinancialRow, prior: FinancialRow): number {
   const gmi = safeDivide(
@@ -73,12 +104,14 @@ function computeMScore(current: FinancialRow, prior: FinancialRow): number {
 }
 
 function scoreMScore(m: number): number {
-  // M < -2.22 = unlikely manipulator → high score
-  // M > -1.78 = likely manipulator → low score
-  if (m < -2.22) return 34;
+  if (m < -2.22) return MSCORE_MAX;
   if (m > -1.78) return 0;
-  return Math.round(34 * safeDivide(-1.78 - m, 0.44));
+  return Math.round(MSCORE_MAX * safeDivide(-1.78 - m, 0.44));
 }
+
+// ============================================================
+// Engine
+// ============================================================
 
 export const riskEngine: Engine = {
   name: 'risk',
@@ -86,28 +119,80 @@ export const riskEngine: Engine = {
   calculate(input: EngineInput): EngineOutput {
     const sorted = [...input.financials].sort((a, b) => b.fiscal_year - a.fiscal_year);
     const latest = sorted[0];
-    const prior = sorted[1] || sorted[0];
+    const prior = sorted[1]; // undefined if < 2 periods — never fall back to latest
 
     if (!latest) {
       return { score: 0, breakdown: {} };
     }
 
+    const hasPrior = prior !== undefined;
+
+    // --- Altman Z (always available with single period) ---
+
     const altmanZ = roundToDecimal(computeAltmanZ(latest), 2);
-    const fScore = computeFScore(latest, prior!);
-    const mScore = prior ? roundToDecimal(computeMScore(latest, prior), 2) : 0;
-
     const altmanScore = scoreAltman(altmanZ);
-    const fScorePoints = scoreFScore(fScore);
-    const mScorePoints = clamp(scoreMScore(mScore), 0, 34);
 
-    const totalScore = clamp(altmanScore + fScorePoints + mScorePoints, 0, 100);
+    // --- Piotroski F-Score (requires 2 periods) ---
+
+    let fMetric: RiskMetric;
+    if (hasPrior) {
+      const rawF = computeFScore(latest, prior);
+      fMetric = {
+        value: rawF,
+        score: scoreFScore(rawF),
+        available: true,
+        model: FSCORE_MODEL,
+      };
+    } else {
+      fMetric = {
+        value: null,
+        score: 0,
+        available: false,
+        model: FSCORE_MODEL,
+        reason: 'insufficient_history',
+      };
+    }
+
+    // --- Beneish M-Score (requires 2 periods) ---
+
+    let mMetric: RiskMetric;
+    if (hasPrior) {
+      const rawM = roundToDecimal(computeMScore(latest, prior), 2);
+      mMetric = {
+        value: rawM,
+        score: clamp(scoreMScore(rawM), 0, MSCORE_MAX),
+        available: true,
+        model: MSCORE_MODEL,
+      };
+    } else {
+      mMetric = {
+        value: null,
+        score: 0,
+        available: false,
+        model: MSCORE_MODEL,
+        reason: 'insufficient_history',
+      };
+    }
+
+    // --- Adaptive scoring: normalize by available max ---
+
+    const availableMax = ALTMAN_MAX + (hasPrior ? FSCORE_MAX + MSCORE_MAX : 0);
+    const actualScore = altmanScore + fMetric.score + mMetric.score;
+    const totalScore = availableMax > 0
+      ? clamp(Math.round((actualScore / availableMax) * 100), 0, 100)
+      : 0;
 
     return {
       score: totalScore,
       breakdown: {
-        altmanZ: { value: altmanZ, score: altmanScore },
-        piotroskiF: { value: fScore, score: fScorePoints },
-        beneishM: { value: mScore, score: mScorePoints },
+        altmanZ: {
+          value: altmanZ,
+          score: altmanScore,
+          available: true,
+          model: ALTMAN_MODEL,
+        },
+        piotroskiF: fMetric,
+        beneishM: mMetric,
       },
     };
   },

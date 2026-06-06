@@ -1,6 +1,8 @@
 import { getCachedResponse } from '../cache';
-import { getMetrics } from '../db';
+import { getMetrics, getCompany } from '../db';
 import { CompanyResponse, Env, ErrorResponse } from '../types';
+import { getIndustrySupport } from '../classification';
+import { runValidation } from '../validation';
 
 export async function handleCompany(
   request: Request,
@@ -9,15 +11,28 @@ export async function handleCompany(
 ): Promise<Response> {
   const upper = ticker.toUpperCase();
 
-  return getCachedResponse(request, env.KV, upper, 'company', async () => {
-    const metrics = await getMetrics(env.DB, upper);
+  // Get base data from cache (scores + industry support, no score warnings)
+  const cached = await getCachedResponse(request, env.KV, upper, 'company', async () => {
+    const [metrics, company] = await Promise.all([
+      getMetrics(env.DB, upper),
+      getCompany(env.DB, upper),
+    ]);
+
     if (!metrics) {
-      const body: ErrorResponse = { error: `Ticker ${upper} not found`, status: 404 };
-      return Response.json(body, { status: 404 });
+      return Response.json({ error: `Ticker ${upper} not found`, status: 404 } as ErrorResponse, { status: 404 });
     }
 
-    const body: CompanyResponse = {
+    const support = getIndustrySupport(company?.sector ?? '', company?.industry ?? '');
+
+    const industryWarnings: string[] = [];
+    if (support.level !== 'PASS' && support.reason) {
+      industryWarnings.push(support.reason);
+    }
+
+    return Response.json({
       ticker: metrics.ticker,
+      industrySupport: { level: support.level, reason: support.reason },
+      warnings: industryWarnings,
       scores: {
         quality: metrics.quality_score,
         growth: metrics.growth_score,
@@ -26,8 +41,17 @@ export async function handleCompany(
         overall: metrics.overall_score,
       },
       updatedAt: metrics.updated_at,
-    };
-
-    return Response.json(body);
+    });
   });
+
+  const data = (await cached.json()) as CompanyResponse;
+  if ('error' in data) {
+    return cached;
+  }
+
+  // Run score validation fresh on every request, merge with cached industry warnings
+  const { allWarnings } = await runValidation(env.DB, upper, data.industrySupport.level, data.warnings);
+
+  const body: CompanyResponse = { ...data, warnings: allWarnings };
+  return Response.json(body);
 }

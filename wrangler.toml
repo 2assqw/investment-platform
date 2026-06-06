@@ -4,15 +4,19 @@ compatibility_date = "2025-05-04"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "investment-db"
-database_id = ""
+database_name = "finscope-db"
+database_id = "d90e6e75-a940-4946-b943-2c42d51fe050"
 
 [[kv_namespaces]]
 binding = "KV"
-id = ""
+id = "d0dcba578a3a4090885ab3e6a9eb359e"
 
 [triggers]
 crons = ["0 22 * * *"]
+
+[[routes]]
+pattern = "2assqw.cc/api/*"
+zone_name = "2assqw.cc"
 
 [env.production]
 [env.production.triggers]
@@ -20,3 +24,6 @@ crons = [
   "0 22 * * *",
   "0 0 * * 0",
 ]
+[[env.production.routes]]
+pattern = "2assqw.cc/api/*"
+zone_name = "2assqw.cc"

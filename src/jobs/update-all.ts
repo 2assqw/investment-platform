@@ -1,7 +1,7 @@
 import { DataProvider } from '../providers';
 import { updateValuation } from './update-valuation';
 import { updateFundamentals } from './update-fundamentals';
-import { getAllTickers } from '../db';
+import { listTickers } from '../db';
 import { Env } from '../types';
 
 /**
@@ -14,7 +14,7 @@ export async function updateAll(
 ): Promise<void> {
   console.log('[update-all] Starting full recalculation...');
 
-  const tickers = await getAllTickers(env.DB);
+  const tickers = await listTickers(env.DB);
   if (tickers.length === 0) {
     console.log('[update-all] No tickers found');
     return;

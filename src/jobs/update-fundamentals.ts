@@ -4,7 +4,7 @@ import {
   getFinancials,
   getMetrics,
   upsertMetrics,
-  replaceMetricBreakdowns,
+  upsertMetricDetails,
 } from '../db';
 import { invalidateCache } from '../cache';
 import { Env } from '../types';
@@ -71,9 +71,9 @@ export async function updateFundamentals(
       });
 
       // Store breakdowns for each engine
-      await replaceMetricBreakdowns(env.DB, ticker, 'quality', breakdownToRows(qualityResult.breakdown));
-      await replaceMetricBreakdowns(env.DB, ticker, 'growth', breakdownToRows(growthResult.breakdown));
-      await replaceMetricBreakdowns(env.DB, ticker, 'risk', breakdownToRows(riskResult.breakdown));
+      await upsertMetricDetails(env.DB, ticker, 'quality', breakdownToRows(qualityResult.breakdown));
+      await upsertMetricDetails(env.DB, ticker, 'growth', breakdownToRows(growthResult.breakdown));
+      await upsertMetricDetails(env.DB, ticker, 'risk', breakdownToRows(riskResult.breakdown));
 
       // Invalidate cache
       await invalidateCache(ticker, env.KV);

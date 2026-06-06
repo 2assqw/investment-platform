@@ -4,6 +4,7 @@
 
 export interface CompanyRow {
   ticker: string;
+  cik: string;
   name: string;
   sector: string;
   industry: string;
@@ -14,6 +15,7 @@ export interface CompanyRow {
 export interface FinancialRow {
   ticker: string;
   fiscal_year: number;
+  period_end_date: string;
   revenue: number;
   gross_profit: number;
   operating_income: number;
@@ -61,8 +63,15 @@ export interface ValuationBenchmarkRow {
 // API response types (stable contract — do not change)
 // ============================================================
 
+export interface IndustrySupportInfo {
+  level: 'PASS' | 'WARNING' | 'FAIL';
+  reason: string | null;
+}
+
 export interface CompanyResponse {
   ticker: string;
+  industrySupport: IndustrySupportInfo;
+  warnings: string[];
   scores: {
     quality: number;
     growth: number;
@@ -75,6 +84,8 @@ export interface CompanyResponse {
 
 export interface BreakdownResponse {
   ticker: string;
+  industrySupport: IndustrySupportInfo;
+  warnings: string[];
   quality: Record<string, MetricDetail>;
   growth: Record<string, MetricDetail>;
   valuation: Record<string, MetricDetail>;
@@ -93,6 +104,7 @@ export interface FinancialsResponse {
 
 export interface FinancialItem {
   fiscalYear: number;
+  periodEndDate: string;
   revenue: number;
   grossProfit: number;
   operatingIncome: number;

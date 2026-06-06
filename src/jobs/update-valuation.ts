@@ -6,10 +6,10 @@ import {
   getMetrics,
   getCompanySector,
   upsertMetrics,
-  upsertValuationBenchmark,
-  replaceMetricBreakdowns,
-  getValuationBenchmarks,
-  getAllTickers,
+  upsertBenchmarks,
+  upsertValuationMetrics,
+  getBenchmarks,
+  listTickers,
 } from '../db';
 import { invalidateCache } from '../cache';
 import { Env, FinancialRow, ValuationBenchmarkRow } from '../types';
@@ -105,7 +105,7 @@ async function updateBenchmarks(
   const allPEs = valuations.map((v) => v.pe);
   const allPSs = valuations.map((v) => v.ps);
 
-  await upsertValuationBenchmark(env.DB, {
+  await upsertBenchmarks(env.DB, {
     sector: 'ALL',
     benchmark_type: 'market',
     pe_median: median(allPEs),
@@ -126,7 +126,7 @@ async function updateBenchmarks(
   }
 
   for (const [sector, data] of bySector) {
-    await upsertValuationBenchmark(env.DB, {
+    await upsertBenchmarks(env.DB, {
       sector,
       benchmark_type: 'sector',
       pe_median: median(data.pes),
@@ -145,11 +145,11 @@ async function scoreTickers(
   env: Env,
   valuations: TickerValuation[],
 ): Promise<void> {
-  const [marketBench] = await getValuationBenchmarks(env.DB, 'ALL');
+  const [marketBench] = await getBenchmarks(env.DB, 'ALL');
   if (!marketBench) return;
 
   for (const v of valuations) {
-    const sectorBenchs = await getValuationBenchmarks(env.DB, v.sector);
+    const sectorBenchs = await getBenchmarks(env.DB, v.sector);
     const sectorBench = sectorBenchs.find((b) => b.benchmark_type === 'sector');
     if (!sectorBench) continue;
 
@@ -181,10 +181,9 @@ async function scoreTickers(
     });
 
     // Store valuation breakdown
-    await replaceMetricBreakdowns(
+    await upsertValuationMetrics(
       env.DB,
       v.ticker,
-      'valuation',
       breakdownToRows(valuationResult.breakdown),
     );
 
@@ -200,7 +199,7 @@ export async function updateValuation(
   env: Env,
   provider: DataProvider,
 ): Promise<void> {
-  const tickers = await getAllTickers(env.DB);
+  const tickers = await listTickers(env.DB);
   if (tickers.length === 0) return;
 
   console.log(`[update-valuation] Processing ${tickers.length} tickers...`);

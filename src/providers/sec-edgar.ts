@@ -1,28 +1,260 @@
 import { DataProvider, FetchFinancialsRequest, FetchPriceRequest, PriceData } from './types';
 import { FinancialRow } from '../types';
 
-/**
- * SEC EDGAR provider stub.
- * Swap with a real implementation (FMP, Polygon, or direct XBRL parser).
- */
+// ============================================================
+// CIK lookup (SEC uses CIK, not ticker)
+// ============================================================
+
+const TICKER_TO_CIK: Record<string, string> = {
+  AAPL: '0000320193',
+  AMZN: '0001018724',
+  BAC: '0000070858',
+  FCX: '0000831259',
+  GOOGL: '0001652044',
+  JPM: '0000019617',
+  META: '0001326801',
+  MSFT: '0000789019',
+  NVDA: '0001045810',
+  O: '0000726728',
+  PLD: '0001045609',
+  TSLA: '0001318605',
+  XOM: '0000034088',
+};
+
+function padCIK(cik: string): string {
+  return `CIK${cik}`;
+}
+
+// ============================================================
+// XBRL tag → FinancialRow field mapping (tried in order)
+// ============================================================
+
+const TAG_MAP: Record<string, string[]> = {
+  revenue: [
+    'Revenues',
+    'RevenueFromContractWithCustomerExcludingAssessedTax',
+    'RevenueFromContractWithCustomer',
+    'SalesRevenueNet',
+    'SalesRevenueGoodsNet',
+  ],
+  gross_profit: ['GrossProfit'],
+  operating_income: ['OperatingIncomeLoss'],
+  net_income: ['NetIncomeLoss', 'ProfitLoss'],
+  operating_cash_flow: ['NetCashProvidedByUsedInOperatingActivities', 'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'],
+  capex: [
+    'PaymentsToAcquireProductiveAssets',
+    'PaymentsToAcquirePropertyPlantAndEquipment',
+    'PaymentsForCapitalExpenditures',
+  ],
+  total_assets: ['Assets'],
+  total_liabilities: ['Liabilities', 'LiabilitiesAndStockholdersEquity'],
+  shareholder_equity: [
+    'StockholdersEquity',
+    'EquityAttributableToParent',
+    'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest',
+    'ShareholdersEquity',
+  ],
+  shares_outstanding: [
+    'WeightedAverageNumberOfDilutedSharesOutstanding',
+    'WeightedAverageNumberOfSharesOutstandingBasic',
+    'WeightedAverageNumberOfBasicSharesOutstanding',
+    'CommonStockSharesOutstanding',
+    'EntityCommonStockSharesOutstanding',
+  ],
+};
+
+// ============================================================
+// XBRL data shapes
+// ============================================================
+
+interface XBRLFact {
+  filed: string;
+  fy: number;
+  fp: string;
+  form: string;
+  val: number;
+  frame?: string;
+  start?: string;
+  end?: string;
+}
+
+interface XBRLResponse {
+  facts: {
+    'us-gaap'?: Record<string, {
+      units: Record<string, XBRLFact[] | undefined>;
+    }>;
+  };
+}
+
+interface SubmissionResponse {
+  name: string;
+  sicDescription: string;
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+
+function getLatestByYear(facts: XBRLFact[]): Map<number, number> {
+  // Filter to annual (10-K) filings, exclude dimensional/segment facts.
+  // Group by end-date year (fy is the filing year, not the data's fiscal year).
+  const annual = facts.filter(
+    (f) => f.form === '10-K' && f.fp === 'FY' && !f.frame,
+  );
+
+  // Group by the calendar year of the period end date
+  const byYear = new Map<number, number[]>();
+  for (const f of annual) {
+    const endYear = parseInt(f.end?.substring(0, 4) ?? String(f.fy), 10);
+    if (!byYear.has(endYear)) byYear.set(endYear, []);
+    byYear.get(endYear)!.push(f.val);
+  }
+
+  // For each year, take the maximum value (annual total > quarterly/partial)
+  const result = new Map<number, number>();
+  for (const [year, values] of byYear) {
+    result.set(year, Math.max(...values));
+  }
+  return result;
+}
+
+function getFirstAvailableTag(
+  facts: Record<string, { units: Record<string, XBRLFact[] | undefined> }>,
+  candidates: string[],
+): Map<number, number> | null {
+  let best: Map<number, number> | null = null;
+  let bestMaxYear = 0;
+
+  for (const tag of candidates) {
+    const factGroup = facts[tag];
+    if (!factGroup) continue;
+
+    for (const unitData of Object.values(factGroup.units)) {
+      if (!unitData) continue;
+      const data = getLatestByYear(unitData);
+      if (data.size === 0) continue;
+
+      // Pick tag with the most RECENT data year. Use data count as tiebreaker.
+      const maxYear = Math.max(...data.keys());
+      const isBetter = !best || maxYear > bestMaxYear || (maxYear === bestMaxYear && data.size > best.size);
+      if (isBetter) {
+        best = data;
+        bestMaxYear = maxYear;
+      }
+    }
+  }
+  return best;
+}
+
+// ============================================================
+// Data provider
+// ============================================================
+
 export const secEdgarProvider: DataProvider = {
   name: 'sec-edgar',
 
-  async fetchFinancials(_req: FetchFinancialsRequest): Promise<FinancialRow[]> {
-    throw new Error(
-      'SEC EDGAR provider not implemented. Swap with a concrete provider (FMP, Polygon, etc.).',
-    );
+  // ------- fetchFinancials -------
+
+  async fetchFinancials(req: FetchFinancialsRequest): Promise<FinancialRow[]> {
+    const cik = TICKER_TO_CIK[req.ticker.toUpperCase()];
+    if (!cik) {
+      throw new Error(`Unknown ticker: ${req.ticker}. Add CIK mapping in sec-edgar.ts.`);
+    }
+
+    const url = `https://data.sec.gov/api/xbrl/companyfacts/${padCIK(cik)}.json`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'investment-platform/1.0 contact@example.com',
+        'Accept-Encoding': 'gzip, deflate',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`SEC EDGAR returned ${response.status} for ${req.ticker}`);
+    }
+
+    const data = (await response.json()) as XBRLResponse;
+    const facts = data.facts?.['us-gaap'];
+    if (!facts) {
+      throw new Error(`No US-GAAP facts found for ${req.ticker}`);
+    }
+
+    // Resolve each tag group
+    const rev = TAG_MAP.revenue!;
+    const gp = TAG_MAP.gross_profit!;
+    const oi = TAG_MAP.operating_income!;
+    const ni = TAG_MAP.net_income!;
+    const ocf = TAG_MAP.operating_cash_flow!;
+    const cap = TAG_MAP.capex!;
+    const ast = TAG_MAP.total_assets!;
+    const liab = TAG_MAP.total_liabilities!;
+    const eq = TAG_MAP.shareholder_equity!;
+    const sh = TAG_MAP.shares_outstanding!;
+
+    const revenueMap = getFirstAvailableTag(facts, rev);
+    const gpMap = getFirstAvailableTag(facts, gp);
+    const oiMap = getFirstAvailableTag(facts, oi);
+    const niMap = getFirstAvailableTag(facts, ni);
+    const ocfMap = getFirstAvailableTag(facts, ocf);
+    const capexMap = getFirstAvailableTag(facts, cap);
+    const assetsMap = getFirstAvailableTag(facts, ast);
+    const liabMap = getFirstAvailableTag(facts, liab);
+    const equityMap = getFirstAvailableTag(facts, eq);
+    const sharesMap = getFirstAvailableTag(facts, sh);
+
+    // Use only years where revenue data exists (most fundamental metric).
+    // This avoids creating rows where revenue=0 due to tag range mismatches.
+    const allYears = new Set(revenueMap?.keys() ?? []);
+
+    if (allYears.size === 0) {
+      throw new Error(`No annual (10-K) financial data found for ${req.ticker}`);
+    }
+
+    // Build FinancialRow for each year
+    const rows: FinancialRow[] = [];
+    for (const fy of [...allYears].sort((a, b) => a - b)) {
+      const revenue = revenueMap?.get(fy) ?? 0;
+      const grossProfit = gpMap?.get(fy) ?? 0;
+      const operatingIncome = oiMap?.get(fy) ?? 0;
+      const netIncome = niMap?.get(fy) ?? 0;
+      const operatingCashFlow = ocfMap?.get(fy) ?? 0;
+      const capex = capexMap?.get(fy) ?? 0;
+      const freeCashFlow = operatingCashFlow - capex; // capex is positive in SEC API, subtract for FCF
+      const totalAssets = assetsMap?.get(fy) ?? 0;
+      const totalLiabilities = liabMap?.get(fy) ?? 0;
+      const shareholderEquity = equityMap?.get(fy) ?? 0;
+      const sharesOutstanding = sharesMap?.get(fy) ?? 0;
+
+      rows.push({
+        ticker: req.ticker.toUpperCase(),
+        fiscal_year: fy,
+        period_end_date: `${fy}-12-31`,
+        revenue,
+        gross_profit: grossProfit,
+        operating_income: operatingIncome,
+        net_income: netIncome,
+        operating_cash_flow: operatingCashFlow,
+        free_cash_flow: freeCashFlow,
+        total_assets: totalAssets,
+        total_liabilities: totalLiabilities,
+        shareholder_equity: shareholderEquity,
+        shares_outstanding: sharesOutstanding,
+      });
+    }
+
+    return rows;
   },
+
+  // ------- fetchPrice (not implemented — P1) -------
 
   async fetchPrice(_req: FetchPriceRequest): Promise<PriceData> {
-    throw new Error(
-      'SEC EDGAR provider does not support price data. Use a market data provider.',
-    );
+    throw new Error('Price data not available via SEC EDGAR. Use a market data provider.');
   },
 
+  // ------- fetchAllTickers (returns mapped tickers only) -------
+
   async fetchAllTickers(): Promise<string[]> {
-    throw new Error(
-      'fetchAllTickers not implemented. Provide a ticker list or use a data provider API.',
-    );
+    return Object.keys(TICKER_TO_CIK);
   },
 };

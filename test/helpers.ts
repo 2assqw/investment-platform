@@ -1,9 +1,11 @@
 import { FinancialRow } from '../src/types';
 
 export function makeFinancialRow(overrides: Partial<FinancialRow> = {}): FinancialRow {
+  const fy = overrides.fiscal_year ?? 2025;
   return {
     ticker: 'TEST',
-    fiscal_year: 2025,
+    fiscal_year: fy,
+    period_end_date: `${fy}-12-31`,
     revenue: 100_000,
     gross_profit: 60_000,
     operating_income: 30_000,

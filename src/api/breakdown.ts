@@ -1,6 +1,7 @@
 import { getCachedResponse } from '../cache';
-import { getMetricBreakdowns } from '../db';
+import { getMetricDetails } from '../db';
 import { BreakdownResponse, Env, ErrorResponse, MetricBreakdownRow } from '../types';
+import { getIndustryInfo } from './helpers';
 
 export async function handleBreakdown(
   request: Request,
@@ -10,7 +11,11 @@ export async function handleBreakdown(
   const upper = ticker.toUpperCase();
 
   return getCachedResponse(request, env.KV, upper, 'breakdown', async () => {
-    const rows = await getMetricBreakdowns(env.DB, upper);
+    const [rows, info] = await Promise.all([
+      getMetricDetails(env.DB, upper),
+      getIndustryInfo(env.DB, upper),
+    ]);
+
     if (rows.length === 0) {
       const body: ErrorResponse = { error: `No breakdown data for ${upper}`, status: 404 };
       return Response.json(body, { status: 404 });
@@ -20,6 +25,8 @@ export async function handleBreakdown(
 
     const body: BreakdownResponse = {
       ticker: upper,
+      industrySupport: info.support,
+      warnings: info.warnings,
       quality: grouped.quality ?? {},
       growth: grouped.growth ?? {},
       valuation: grouped.valuation ?? {},

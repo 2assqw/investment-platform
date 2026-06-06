@@ -1,9 +1,12 @@
-import { handleCompany, handleBreakdown, handleFinancials } from './api';
+import { handleCompany, handleBreakdown, handleFinancials, handleMetrics } from './api';
 import { updateValuation } from './jobs/update-valuation';
 import { updateFundamentals } from './jobs/update-fundamentals';
 import { updateAll } from './jobs/update-all';
+import { seedNVDA } from './admin/seed-nvda';
+import { seedTicker } from './admin/seed';
+import { generateCoverageReport } from './admin/model-coverage';
 import { secEdgarProvider } from './providers';
-import { getAllTickers } from './db';
+import { listTickers } from './db';
 import { Env, ErrorResponse } from './types';
 
 function corsHeaders(): HeadersInit {
@@ -62,6 +65,33 @@ export default {
       return wrapCors(res);
     }
 
+    // GET /api/metrics/:ticker  (P0: combined scores + breakdown, no cache)
+    const metricsMatch = path.match(/^\/api\/metrics\/([A-Za-z]{1,5})$/);
+    if (metricsMatch && request.method === 'GET') {
+      const res = await handleMetrics(request, env, metricsMatch[1]!);
+      return wrapCors(res);
+    }
+
+    // GET /api/admin/seed-nvda  (legacy)
+    if (path === '/api/admin/seed-nvda' && request.method === 'GET') {
+      const res = await seedNVDA(env);
+      return wrapCors(res);
+    }
+
+    // GET /api/admin/seed/:ticker  (generic: seed any ticker)
+    const seedMatch = path.match(/^\/api\/admin\/seed\/([A-Za-z]{1,5})$/);
+    if (seedMatch && request.method === 'GET') {
+      const refresh = url.searchParams.get('refresh') === 'true';
+      const res = await seedTicker(env, seedMatch[1]!, refresh);
+      return wrapCors(res);
+    }
+
+    // GET /api/admin/model-coverage  (sector validation report)
+    if (path === '/api/admin/model-coverage' && request.method === 'GET') {
+      const res = await generateCoverageReport(env);
+      return wrapCors(res);
+    }
+
     return notFound();
   },
 
@@ -71,7 +101,7 @@ export default {
     if (cron.includes('* * 0')) {
       // Weekly: fundamentals
       console.log('[scheduled] Running weekly fundamentals job');
-      const tickers = await getAllTickers(env.DB);
+      const tickers = await listTickers(env.DB);
       await updateFundamentals(env, tickers);
       return;
     }

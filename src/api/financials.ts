@@ -18,6 +18,7 @@ export async function handleFinancials(
 
     const items: FinancialItem[] = rows.map((r) => ({
       fiscalYear: r.fiscal_year,
+      periodEndDate: r.period_end_date,
       revenue: r.revenue,
       grossProfit: r.gross_profit,
       operatingIncome: r.operating_income,

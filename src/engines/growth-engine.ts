@@ -27,11 +27,28 @@ export const growthEngine: Engine = {
 
     const totalScore = clamp(revenueScore + epsScore + fcfScore, 0, 100);
 
+    // Check for stock split warnings that affect the CAGR window
+    const shareRatio = safeDivide(latest.shares_outstanding, threeYearsAgo.shares_outstanding);
+    const splitWarning = input.warnings?.find(
+      (w) =>
+        w.type === 'possible_stock_split_detected' &&
+        w.fiscalYear > threeYearsAgo.fiscal_year &&
+        w.fiscalYear <= latest.fiscal_year,
+    );
+
+    const epsBreakdown: Record<string, unknown> = {
+      value: roundToDecimal(epsCagr * 100, 1),
+      score: epsScore,
+    };
+    if (splitWarning) {
+      epsBreakdown.warning = 'possible_stock_split_detected';
+    }
+
     return {
       score: totalScore,
       breakdown: {
         revenueCagr: { value: roundToDecimal(revenueCagr * 100, 1), score: revenueScore },
-        epsCagr: { value: roundToDecimal(epsCagr * 100, 1), score: epsScore },
+        epsCagr: epsBreakdown,
         fcfCagr: { value: roundToDecimal(fcfCagr * 100, 1), score: fcfScore },
       },
     };
