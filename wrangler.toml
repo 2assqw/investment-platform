@@ -1,8 +1,6 @@
 name = "investment-platform"
 main = "src/index.ts"
 compatibility_date = "2025-05-04"
-pages_build_output_dir = "out"
-pages_build_root_dir = "."
 
 # Secrets: npx wrangler secret put FMP_API_KEY
 # (set your FMP key, then redeploy)
