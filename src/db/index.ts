@@ -25,3 +25,16 @@ export {
   getBenchmarks,
   upsertBenchmarks,
 } from './repositories/valuation-repository';
+
+export {
+  upsertFactorScores,
+  getFactorScores,
+} from './repositories/factor-repository';
+
+export {
+  insertScoreHistory,
+  getScoreHistory,
+  snapshotAllScores,
+  getTrendingCompanies,
+  getScoreChanges,
+} from './repositories/history-repository';

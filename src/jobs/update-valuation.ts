@@ -32,6 +32,12 @@ function median(arr: number[]): number {
     : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+function p25(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length * 0.25)]!;
+}
+
 function p75(arr: number[]): number {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
@@ -109,8 +115,10 @@ async function updateBenchmarks(
     sector: 'ALL',
     benchmark_type: 'market',
     pe_median: median(allPEs),
+    pe_p25: p25(allPEs),
     pe_p75: p75(allPEs),
     ps_median: median(allPSs),
+    ps_p25: p25(allPSs),
     ps_p75: p75(allPSs),
     updated_at: '',
   });
@@ -130,8 +138,10 @@ async function updateBenchmarks(
       sector,
       benchmark_type: 'sector',
       pe_median: median(data.pes),
+      pe_p25: p25(data.pes),
       pe_p75: p75(data.pes),
       ps_median: median(data.pss),
+      ps_p25: p25(data.pss),
       ps_p75: p75(data.pss),
       updated_at: '',
     });

@@ -7,8 +7,10 @@ function makeBench(overrides: Partial<ValuationBenchmarkRow> = {}): ValuationBen
     sector: 'Technology',
     benchmark_type: 'sector',
     pe_median: 25,
+    pe_p25: 15,
     pe_p75: 40,
     ps_median: 8,
+    ps_p25: 4,
     ps_p75: 15,
     updated_at: '',
     ...overrides,
@@ -43,9 +45,10 @@ describe('computeValuationScore', () => {
     const b = result.breakdown as Record<string, Record<string, number>>;
     expect(b.pe).toBeDefined();
     expect(b.ps).toBeDefined();
-    expect(b.pe.sectorPercentile).toBeDefined();
-    expect(b.pe.marketPercentile).toBeDefined();
-    expect(b.pe.weightedPercentile).toBeDefined();
+    expect(b.pe.percentile).toBeDefined();
+    expect(b.pe.sectorMedian).toBeDefined();
+    expect(b.pe.sectorP25).toBeDefined();
+    expect(b.pe.sectorP75).toBeDefined();
   });
 
   it('handles zero PE gracefully', () => {

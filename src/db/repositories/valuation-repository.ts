@@ -50,12 +50,14 @@ export async function upsertBenchmarks(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO valuation_benchmarks (sector, benchmark_type, pe_median, pe_p75, ps_median, ps_p75, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO valuation_benchmarks (sector, benchmark_type, pe_median, pe_p25, pe_p75, ps_median, ps_p25, ps_p75, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(sector, benchmark_type) DO UPDATE SET
          pe_median = excluded.pe_median,
+         pe_p25 = excluded.pe_p25,
          pe_p75 = excluded.pe_p75,
          ps_median = excluded.ps_median,
+         ps_p25 = excluded.ps_p25,
          ps_p75 = excluded.ps_p75,
          updated_at = excluded.updated_at`,
     )
@@ -63,8 +65,10 @@ export async function upsertBenchmarks(
       row.sector,
       row.benchmark_type,
       row.pe_median,
+      row.pe_p25 ?? 0,
       row.pe_p75,
       row.ps_median,
+      row.ps_p25 ?? 0,
       row.ps_p75,
     )
     .run();

@@ -53,8 +53,10 @@ export interface ValuationBenchmarkRow {
   sector: string;
   benchmark_type: 'sector' | 'market';
   pe_median: number;
+  pe_p25: number;
   pe_p75: number;
   ps_median: number;
+  ps_p25: number;
   ps_p75: number;
   updated_at: string;
 }

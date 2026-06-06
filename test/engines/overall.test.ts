@@ -22,9 +22,9 @@ describe('Overall Engine', () => {
     expect(b.growth).toBeDefined();
     expect(b.valuation).toBeDefined();
     expect(b.risk).toBeDefined();
-    expect(b.quality!.weight).toBe(0.30);
-    expect(b.growth!.weight).toBe(0.30);
-    expect(b.valuation!.weight).toBe(0.20);
+    expect(b.quality!.weight).toBe(0.25);
+    expect(b.growth!.weight).toBe(0.25);
+    expect(b.valuation!.weight).toBe(0.30);
     expect(b.risk!.weight).toBe(0.20);
   });
 
@@ -35,9 +35,9 @@ describe('Overall Engine', () => {
     });
     const b = result.breakdown as Record<string, { score: number; weight: number }>;
     const expected = Math.round(
-      b.quality!.score * 0.30 +
-      b.growth!.score * 0.30 +
-      b.valuation!.score * 0.20 +
+      b.quality!.score * 0.25 +
+      b.growth!.score * 0.25 +
+      b.valuation!.score * 0.30 +
       b.risk!.score * 0.20,
     );
     expect(result.score).toBe(expected);

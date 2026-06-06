@@ -17,5 +17,8 @@
     "typescript": "^5.5.0",
     "vitest": "^4.1.8",
     "wrangler": "^4.98.0"
+  },
+  "dependencies": {
+    "yahoo-finance2": "^3.15.2"
   }
 }

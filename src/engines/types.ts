@@ -6,6 +6,7 @@ export interface EngineInput {
   financials: FinancialRow[];
   benchmarks?: ValuationBenchmarkRow[];
   warnings?: NormalizationWarning[];
+  marketCap?: number;
 }
 
 export interface EngineOutput {

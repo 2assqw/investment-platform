@@ -6,9 +6,9 @@ import { riskEngine } from './risk-engine';
 import { clamp } from './scoring';
 
 const WEIGHTS = {
-  quality: 0.30,
-  growth: 0.30,
-  valuation: 0.20,
+  quality: 0.25,
+  growth: 0.25,
+  valuation: 0.30,
   risk: 0.20,
 } as const;
 
